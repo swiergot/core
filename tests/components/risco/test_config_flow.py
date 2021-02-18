@@ -37,6 +37,7 @@ TEST_HA_TO_RISCO = {
 
 TEST_OPTIONS = {
     "scan_interval": 10,
+    "cache_expiry_time": 0,
     "code_arm_required": True,
     "code_disarm_required": True,
 }
