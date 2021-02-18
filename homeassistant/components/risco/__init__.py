@@ -2,6 +2,7 @@
 import asyncio
 from datetime import timedelta
 import logging
+from time import monotonic
 
 from pyrisco import CannotConnectError, OperationError, RiscoAPI, UnauthorizedError
 
@@ -18,7 +19,14 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DATA_COORDINATOR, DEFAULT_SCAN_INTERVAL, DOMAIN, EVENTS_COORDINATOR
+from .const import (
+    CONF_CACHE_EXPIRY_TIME,
+    DATA_COORDINATOR,
+    DEFAULT_CACHE_EXPIRY_TIME,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    EVENTS_COORDINATOR,
+)
 
 PLATFORMS = ["alarm_control_panel", "binary_sensor", "sensor"]
 UNDO_UPDATE_LISTENER = "undo_update_listener"
@@ -46,7 +54,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         return False
 
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-    coordinator = RiscoDataUpdateCoordinator(hass, risco, scan_interval)
+    cache_expiry_time = entry.options.get(
+        CONF_CACHE_EXPIRY_TIME, DEFAULT_CACHE_EXPIRY_TIME
+    )
+    coordinator = RiscoDataUpdateCoordinator(
+        hass, risco, scan_interval, cache_expiry_time
+    )
     await coordinator.async_refresh()
     events_coordinator = RiscoEventsDataUpdateCoordinator(
         hass, risco, entry.entry_id, 60
@@ -100,9 +113,13 @@ async def _update_listener(hass: HomeAssistant, entry: ConfigEntry):
 class RiscoDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching risco data."""
 
-    def __init__(self, hass, risco, scan_interval):
+    def __init__(self, hass, risco, scan_interval, cache_expiry_time):
         """Initialize global risco data updater."""
         self.risco = risco
+        self.cache = None
+        self.cache_time = None
+        self.cache_expiry_time = cache_expiry_time
+        self.last_error_msg = None
         interval = timedelta(seconds=scan_interval)
         super().__init__(
             hass,
@@ -114,8 +131,24 @@ class RiscoDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         """Fetch data from risco."""
         try:
-            return await self.risco.get_state()
+            self.cache = await self.risco.get_state()
+            self.cache_time = monotonic()
+            if self.last_error_msg:
+                _LOGGER.debug("No need to use cache anymore")
+                self.last_error_msg = None
+            return self.cache
         except (CannotConnectError, UnauthorizedError, OperationError) as error:
+            if self.cache_expiry_time > 0 and self.cache:
+                cache_age = monotonic() - self.cache_time
+                if cache_age > self.cache_expiry_time:
+                    _LOGGER.debug("Cache has expired")
+                else:
+                    error_msg = f"Returning cached state due to {error.__class__.__name__}: {error}"
+                    if error_msg != self.last_error_msg:
+                        _LOGGER.debug(error_msg)
+                        self.last_error_msg = error_msg
+                    return self.cache
+            self.last_error_msg = None
             raise UpdateFailed(error) from error
 
 

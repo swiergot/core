@@ -24,6 +24,7 @@
         "title": "Configure options",
         "data": {
           "scan_interval": "How often to poll Risco (in seconds)",
+          "cache_expiry_time": "Remember the last state for (in seconds, 0 - don't)",
           "code_arm_required": "Require [%key:common::config_flow::data::pin%] to arm",
           "code_disarm_required": "Require [%key:common::config_flow::data::pin%] to disarm"
         }

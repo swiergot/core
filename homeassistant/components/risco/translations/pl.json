@@ -34,6 +34,7 @@
                 "data": {
                     "code_arm_required": "Wymagaj kodu PIN do uzbrojenia",
                     "code_disarm_required": "Wymagaj kodu PIN do rozbrojenia",
+                    "cache_expiry_time": "Pami\u0119taj ostatni stan przez (w sekundach, 0 - nie pami\u0119taj)",
                     "scan_interval": "Jak cz\u0119sto odpytywa\u0107 Risco (w sekundach)"
                 },
                 "title": "Opcje"

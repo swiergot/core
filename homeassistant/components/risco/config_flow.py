@@ -16,8 +16,10 @@ from homeassistant.const import (
     STATE_ALARM_ARMED_NIGHT,
 )
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.config_validation import positive_int
 
 from .const import (
+    CONF_CACHE_EXPIRY_TIME,
     CONF_CODE_ARM_REQUIRED,
     CONF_CODE_DISARM_REQUIRED,
     CONF_HA_STATES_TO_RISCO,
@@ -104,6 +106,9 @@ class RiscoOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required(
                     CONF_SCAN_INTERVAL, default=self._data[CONF_SCAN_INTERVAL]
                 ): int,
+                vol.Required(
+                    CONF_CACHE_EXPIRY_TIME, default=self._data[CONF_CACHE_EXPIRY_TIME]
+                ): positive_int,
                 vol.Required(
                     CONF_CODE_ARM_REQUIRED, default=self._data[CONF_CODE_ARM_REQUIRED]
                 ): bool,
