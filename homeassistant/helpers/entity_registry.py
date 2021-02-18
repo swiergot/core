@@ -35,6 +35,7 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
 )
 from homeassistant.core import Event, callback, split_entity_id, valid_entity_id
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import EVENT_DEVICE_REGISTRY_UPDATED
 from homeassistant.loader import bind_hass
 from homeassistant.util import slugify
@@ -313,7 +314,8 @@ class EntityRegistry:
         )
         self.async_schedule_save()
 
-    async def async_device_modified(self, event: Event) -> None:
+    @callback
+    def async_device_modified(self, event: Event) -> None:
         """Handle the removal or update of a device.
 
         Remove entities from the registry that are associated to a device when
@@ -333,7 +335,7 @@ class EntityRegistry:
         if event.data["action"] != "update":
             return
 
-        device_registry = await self.hass.helpers.device_registry.async_get_registry()
+        device_registry = dr.async_get(self.hass)
         device = device_registry.async_get(event.data["device_id"])
 
         # The device may be deleted already if the event handling is late
@@ -640,11 +642,13 @@ def async_setup_entity_restore(
     """Set up the entity restore mechanism."""
 
     @callback
+    def cleanup_restored_states_filter(event: Event) -> bool:
+        """Clean up restored states filter."""
+        return bool(event.data["action"] == "remove")
+
+    @callback
     def cleanup_restored_states(event: Event) -> None:
         """Clean up restored states."""
-        if event.data["action"] != "remove":
-            return
-
         state = hass.states.get(event.data["entity_id"])
 
         if state is None or not state.attributes.get(ATTR_RESTORED):
@@ -652,7 +656,11 @@ def async_setup_entity_restore(
 
         hass.states.async_remove(event.data["entity_id"], context=event.context)
 
-    hass.bus.async_listen(EVENT_ENTITY_REGISTRY_UPDATED, cleanup_restored_states)
+    hass.bus.async_listen(
+        EVENT_ENTITY_REGISTRY_UPDATED,
+        cleanup_restored_states,
+        event_filter=cleanup_restored_states_filter,
+    )
 
     if hass.is_running:
         return

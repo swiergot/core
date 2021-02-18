@@ -903,7 +903,6 @@ class ConfigFlow(data_entry_flow.FlowHandler):
         reload_on_update: bool = True,
     ) -> None:
         """Abort if the unique ID is already configured."""
-        assert self.hass
         if self.unique_id is None:
             return
 
@@ -945,7 +944,6 @@ class ConfigFlow(data_entry_flow.FlowHandler):
         self.context["unique_id"] = unique_id  # pylint: disable=no-member
 
         # Abort discoveries done using the default discovery unique id
-        assert self.hass is not None
         if unique_id != DEFAULT_DISCOVERY_UNIQUE_ID:
             for progress in self._async_in_progress():
                 if progress["context"].get("unique_id") == DEFAULT_DISCOVERY_UNIQUE_ID:
@@ -963,7 +961,6 @@ class ConfigFlow(data_entry_flow.FlowHandler):
 
         If the flow is user initiated, filter out ignored entries unless include_ignore is True.
         """
-        assert self.hass is not None
         config_entries = self.hass.config_entries.async_entries(self.handler)
 
         if include_ignore or self.source != SOURCE_USER:
@@ -974,7 +971,6 @@ class ConfigFlow(data_entry_flow.FlowHandler):
     @callback
     def _async_current_ids(self, include_ignore: bool = True) -> Set[Optional[str]]:
         """Return current unique IDs."""
-        assert self.hass is not None
         return {
             entry.unique_id
             for entry in self.hass.config_entries.async_entries(self.handler)
@@ -984,7 +980,6 @@ class ConfigFlow(data_entry_flow.FlowHandler):
     @callback
     def _async_in_progress(self) -> List[Dict]:
         """Return other in progress flows for current domain."""
-        assert self.hass is not None
         return [
             flw
             for flw in self.hass.config_entries.flow.async_progress()
@@ -1027,7 +1022,6 @@ class ConfigFlow(data_entry_flow.FlowHandler):
         self._abort_if_unique_id_configured()
 
         # Abort if any other flow for this handler is already in progress
-        assert self.hass is not None
         if self._async_in_progress():
             raise data_entry_flow.AbortFlow("already_in_progress")
 
@@ -1043,8 +1037,6 @@ class ConfigFlow(data_entry_flow.FlowHandler):
         self, *, reason: str, description_placeholders: Optional[Dict] = None
     ) -> Dict[str, Any]:
         """Abort the config flow."""
-        assert self.hass
-
         # Remove reauth notification if no reauth flows are in progress
         if self.source == SOURCE_REAUTH and not any(
             ent["context"]["source"] == SOURCE_REAUTH
@@ -1147,17 +1139,13 @@ class EntityRegistryDisabledHandler:
     def async_setup(self) -> None:
         """Set up the disable handler."""
         self.hass.bus.async_listen(
-            entity_registry.EVENT_ENTITY_REGISTRY_UPDATED, self._handle_entry_updated
+            entity_registry.EVENT_ENTITY_REGISTRY_UPDATED,
+            self._handle_entry_updated,
+            event_filter=_handle_entry_updated_filter,
         )
 
     async def _handle_entry_updated(self, event: Event) -> None:
         """Handle entity registry entry update."""
-        if (
-            event.data["action"] != "update"
-            or "disabled_by" not in event.data["changes"]
-        ):
-            return
-
         if self.registry is None:
             self.registry = await entity_registry.async_get_registry(self.hass)
 
@@ -1209,6 +1197,14 @@ class EntityRegistryDisabledHandler:
         await asyncio.gather(
             *[self.hass.config_entries.async_reload(entry_id) for entry_id in to_reload]
         )
+
+
+@callback
+def _handle_entry_updated_filter(event: Event) -> bool:
+    """Handle entity registry entry update filter."""
+    if event.data["action"] != "update" or "disabled_by" not in event.data["changes"]:
+        return False
+    return True
 
 
 async def support_entry_unload(hass: HomeAssistant, domain: str) -> bool:
